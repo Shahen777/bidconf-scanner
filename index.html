@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="ru"><head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<title>BIDCONF 2026 — сканер входа</title>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  :root{--silver:linear-gradient(180deg,#fff,#e8edf1 50%,#b9c2cb 60%,#fff)}
+  html,body{margin:0;height:100%;background:#0c0d10;font-family:-apple-system,system-ui,"Segoe UI",sans-serif;overflow:hidden;color:#fff}
+  /* ---- passcode gate ---- */
+  #gate{position:fixed;inset:0;z-index:30;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px;background:#0c0d10}
+  #gate h1{font-weight:800;letter-spacing:2px;font-size:26px;margin:0 0 4px;background:var(--silver);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  #gate p{color:#8a9099;margin:0 0 22px;font-size:14px}
+  #gate input{width:100%;max-width:320px;padding:15px;font-size:18px;border:1px solid #2a2d33;border-radius:12px;background:#16181d;color:#fff;text-align:center}
+  #gate button{width:100%;max-width:320px;margin-top:12px;padding:15px;font-size:17px;font-weight:800;border:0;border-radius:12px;background:#e7ebf0;color:#111;cursor:pointer}
+  #gerr{color:#e8654f;margin-top:12px;font-size:14px;min-height:18px}
+  /* ---- scanner ---- */
+  #bar{position:fixed;top:0;left:0;right:0;z-index:5;display:flex;justify-content:space-between;align-items:center;padding:11px 15px;background:#111317;border-bottom:1px solid #23262c}
+  #bar .ttl{font-weight:800;letter-spacing:1.5px;font-size:14px;background:var(--silver);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  #count{background:#1f9d57;color:#fff;padding:5px 13px;border-radius:20px;font-size:13px;font-weight:700}
+  #v{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;background:#000}
+  #frame{position:fixed;top:46%;left:50%;transform:translate(-50%,-50%);width:66vw;max-width:300px;aspect-ratio:1;border:3px solid rgba(231,235,240,.95);border-radius:20px;box-shadow:0 0 0 9999px rgba(0,0,0,.45);z-index:2}
+  #hint{position:fixed;bottom:84px;left:0;right:0;text-align:center;color:#e7ebf0;font-size:16px;text-shadow:0 1px 6px #000;z-index:3}
+  #guests-btn{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:4;background:#222530;color:#e7ebf0;border:1px solid #3a3e48;padding:13px 24px;border-radius:26px;font-size:15px;font-weight:700}
+  /* ---- result overlay ---- */
+  #ov{position:fixed;inset:0;z-index:10;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:26px;text-align:center}
+  #ov.ok{background:#1c9b55}#ov.warn{background:#c98213}#ov.err{background:#bb3a2c}#ov.check{background:#111317}
+  #otitle{font-size:40px;font-weight:800;line-height:1.06}
+  #oname{font-size:30px;font-weight:800;margin-top:16px;word-break:break-word}
+  #oco{font-size:17px;opacity:.92;margin-top:6px}
+  #obadge{display:inline-block;margin-top:14px;padding:7px 16px;border-radius:22px;font-weight:800;font-size:15px;background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.35)}
+  #onum{font-size:14px;opacity:.85;margin-top:10px;letter-spacing:1px}
+  #omsg{font-size:15px;opacity:.92;margin-top:8px}
+  #next{margin-top:30px;padding:17px 30px;font-size:20px;font-weight:800;border:0;border-radius:14px;background:#fff;color:#111}
+  .hidden{display:none!important}
+  /* ---- guests list ---- */
+  #guests{position:fixed;inset:0;z-index:20;background:#0c0d10;display:flex;flex-direction:column}
+  #guests header{padding:12px 14px;background:#111317;border-bottom:1px solid #23262c}
+  #guests .top{display:flex;justify-content:space-between;align-items:center}
+  #guests .top button{background:none;border:0;color:#e7ebf0;font-weight:700;font-size:15px}
+  #guests h2{margin:0;font-size:15px;letter-spacing:1px;background:var(--silver);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .stats{display:flex;gap:8px;margin-top:10px}
+  .stat{flex:1;background:#16181d;border-radius:10px;padding:8px;text-align:center}
+  .stat b{display:block;font-size:22px}.stat.in b{color:#2ecc71}.stat.wait b{color:#e0a13a}
+  .stat span{font-size:11px;color:#8a9099}
+  #q{width:100%;margin-top:10px;padding:12px;border-radius:10px;border:1px solid #2a2d33;background:#16181d;color:#fff;font-size:16px}
+  .tabs{display:flex;gap:6px;margin-top:10px}
+  .tabs button{flex:1;padding:9px;border:0;border-radius:8px;background:#16181d;color:#aeb4bd;font-weight:600;font-size:13px}
+  .tabs button.on{background:#e7ebf0;color:#111}
+  #glist{list-style:none;margin:0;padding:10px 12px 30px;overflow:auto;flex:1}
+  #glist li{background:#15171c;border-radius:10px;padding:11px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .nm{font-weight:700}.co{font-size:12px;color:#8a9099;margin-top:2px}
+  .badge{flex:none;font-size:12px;font-weight:700;padding:6px 10px;border-radius:18px}
+  .badge.in{background:#1c7a45;color:#fff}.badge.wait{background:#3a3320;color:#e9c270}
+  .typ{font-size:11px;font-weight:800;color:#cfd6dd}
+</style></head>
+<body>
+
+<!-- passcode gate -->
+<div id="gate">
+  <h1>BIDCONF 2026</h1><p>Сканер регистрации · вход для персонала</p>
+  <input id="gpass" type="password" inputmode="text" placeholder="Код доступа" autofocus/>
+  <button id="gbtn">Войти</button>
+  <div id="gerr"></div>
+</div>
+
+<!-- scanner -->
+<div id="bar"><span class="ttl">BIDCONF 2026 · ВХОД</span><span id="count">Прошло: 0</span></div>
+<video id="v" playsinline autoplay muted></video>
+<div id="frame"></div>
+<div id="hint">Наведите камеру на QR билета</div>
+<button id="guests-btn">👥 Список гостей</button>
+<canvas id="c" class="hidden"></canvas>
+<div id="ov" class="hidden">
+  <div id="otitle"></div><div id="oname"></div><div id="oco"></div>
+  <div id="obadge"></div><div id="onum"></div><div id="omsg"></div>
+  <button id="next">Сканировать следующий →</button>
+</div>
+
+<!-- guests list -->
+<div id="guests" class="hidden">
+  <header>
+    <div class="top"><button id="g-back">← Сканер</button><h2>ГОСТИ</h2><button id="g-reset">Сброс</button></div>
+    <div class="stats">
+      <div class="stat in"><b id="cIn">0</b><span>прошли</span></div>
+      <div class="stat wait"><b id="cWait">0</b><span>ждём</span></div>
+      <div class="stat"><b id="cAll">0</b><span>всего</span></div>
+    </div>
+    <input id="q" placeholder="Поиск по имени или компании…"/>
+    <div class="tabs"><button data-f="all" class="on">Все</button><button data-f="wait">Не пришли</button><button data-f="in">Прошли</button></div>
+  </header>
+  <ul id="glist"></ul>
+</div>
+
+<script src="jsqr.min.js"></script>
+<script>
+const PBKDF2_ITERS=200000;   // must match tools/gen_scanner_registry.py
+const LS_AUTH="bidconf_scan_auth", LS_USED="bidconf_used";
+const $=id=>document.getElementById(id);
+
+async function sha256hex(s){
+  const b=await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');
+}
+
+let TICKETS={};                          // hash -> {n,name,co,t}
+let used=JSON.parse(localStorage.getItem(LS_USED)||"{}");   // hash -> {at}
+function saveUsed(){ localStorage.setItem(LS_USED, JSON.stringify(used)); }
+
+/* ---------- passcode gate: code derives the AES key that decrypts the registry ---------- */
+async function deriveKey(pass, salt){
+  const base=await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2', salt, iterations:PBKDF2_ITERS, hash:'SHA-256'},
+    base, {name:'AES-GCM', length:256}, false, ['decrypt']);
+}
+async function loadRegistry(pass){
+  const b64=(await (await fetch('tickets.enc',{cache:'no-store'})).text()).trim();
+  const raw=Uint8Array.from(atob(b64), c=>c.charCodeAt(0));
+  const salt=raw.slice(0,16), iv=raw.slice(16,28), ct=raw.slice(28);
+  const key=await deriveKey(pass, salt);
+  const pt=await crypto.subtle.decrypt({name:'AES-GCM', iv}, key, ct);  // throws on wrong code
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+async function enter(pass){
+  TICKETS=await loadRegistry(pass);            // throws if the code is wrong
+  localStorage.setItem(LS_AUTH, pass);
+  $("gate").classList.add("hidden");
+  refreshCount(); startCamera();
+}
+async function tryAuth(){
+  const v=$("gpass").value.trim(); if(!v) return;
+  $("gerr").textContent="Проверяю…";
+  try{ await enter(v); }
+  catch(e){ $("gerr").textContent="Неверный код"; $("gpass").value=""; }
+}
+$("gbtn").onclick=tryAuth;
+$("gpass").addEventListener("keydown",e=>{ if(e.key==="Enter") tryAuth(); });
+
+/* ---------- counters ---------- */
+function refreshCount(){ $("count").textContent="Прошло: "+Object.keys(used).length; }
+
+/* ---------- scanning ---------- */
+const video=$("v"), canvas=$("c"), ctx=canvas.getContext('2d',{willReadFrequently:true});
+const ov=$("ov");
+let paused=true, resumeTimer=null;
+const seen=new Map();
+let detector=null;
+if('BarcodeDetector' in window){ try{ detector=new BarcodeDetector({formats:['qr_code']}); }catch(e){} }
+
+function beep(ok){ try{
+  const a=new (window.AudioContext||window.webkitAudioContext)();
+  const o=a.createOscillator(), g=a.createGain(); o.connect(g); g.connect(a.destination);
+  o.frequency.value=ok?880:300; o.type='square'; g.gain.value=0.2; o.start();
+  setTimeout(()=>{o.stop();a.close();}, ok?140:420);
+}catch(e){} }
+function vibrate(ok){ try{ navigator.vibrate&&navigator.vibrate(ok?80:[90,60,90]); }catch(e){} }
+
+function extractToken(raw){
+  if(!raw) return null;
+  const m=raw.match(/[?&]token=([^&\s]+)/);
+  if(m) return decodeURIComponent(m[1]);
+  if(/^[A-Z2-7]+\.[A-Z2-7]+$/i.test(raw.trim())) return raw.trim();
+  return null;
+}
+function fmt(ts){ try{ return new Date(ts).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}); }catch(e){ return ''; } }
+function showOv(cls){ ov.className=cls; ov.classList.remove('hidden'); }
+function hideOv(){ ov.classList.add('hidden'); }
+
+async function handleToken(token){
+  paused=true; $("otitle").textContent='Проверяю…';
+  ["oname","oco","obadge","onum","omsg"].forEach(i=>$(i).textContent=''); showOv('check');
+  const h=await sha256hex(token);
+  const t=TICKETS[h];
+  let cls,title,ok=false,hold=2600;
+  if(!t){ cls='err'; title='❌ НЕ НАЙДЕН'; hold=3800; $("omsg").textContent='Билет недействителен'; }
+  else if(used[h]){ cls='warn'; title='⚠️ УЖЕ ВОШЁЛ'; hold=3800; $("omsg").textContent='Отметка входа: '+fmt(used[h].at); }
+  else { cls='ok'; title='✅ ПРОПУСТИТЬ'; ok=true; used[h]={at:Date.now()}; saveUsed(); refreshCount(); }
+  if(t){
+    $("oname").textContent=t.name;
+    $("oco").textContent=t.co||'';
+    $("obadge").textContent=t.t;
+    $("onum").textContent='Билет № '+t.n;
+  }
+  $("otitle").textContent=title; showOv(cls); beep(ok); vibrate(ok);
+  clearTimeout(resumeTimer); resumeTimer=setTimeout(resume, hold);
+}
+
+function resume(){ clearTimeout(resumeTimer); hideOv(); paused=false; }
+$("next").onclick=resume;
+ov.addEventListener('click',e=>{ if(e.target===ov) resume(); });
+
+async function loop(){
+  if(!paused && video.readyState>=2){
+    let raw=null;
+    if(detector){ try{ const codes=await detector.detect(video); if(codes&&codes.length) raw=codes[0].rawValue; }catch(e){ detector=null; } }
+    if(!raw && window.jsQR && video.videoWidth){
+      canvas.width=video.videoWidth; canvas.height=video.videoHeight;
+      ctx.drawImage(video,0,0,canvas.width,canvas.height);
+      const im=ctx.getImageData(0,0,canvas.width,canvas.height);
+      const code=jsQR(im.data,im.width,im.height,{inversionAttempts:'dontInvert'});
+      if(code) raw=code.data;
+    }
+    if(raw){
+      const token=extractToken(raw);
+      if(token){ const now=Date.now();
+        if(now-(seen.get(token)||0)>4000){ seen.set(token,now); await handleToken(token); } }
+    }
+  }
+  setTimeout(loop, detector?90:150);
+}
+
+async function startCamera(){
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});
+    video.srcObject=stream; await video.play(); paused=false; loop();
+  }catch(e){
+    $("hint").innerHTML='Камера недоступна — разрешите доступ к камере и обновите страницу.';
+  }
+}
+
+/* ---------- guests list ---------- */
+let gfilter='all';
+function renderGuests(){
+  const arr=Object.values(TICKETS).map(t=>t); // values only; need hash for used -> rebuild
+  const entries=Object.entries(TICKETS).map(([h,t])=>({...t, used:!!used[h], at:used[h]&&used[h].at}));
+  const inN=entries.filter(x=>x.used).length;
+  $("cIn").textContent=inN; $("cWait").textContent=entries.length-inN; $("cAll").textContent=entries.length;
+  const ql=($("q").value||'').trim().toLowerCase();
+  const rows=entries.filter(x=>{
+    if(gfilter==='in'&&!x.used) return false;
+    if(gfilter==='wait'&&x.used) return false;
+    if(ql&&!((x.name||'').toLowerCase().includes(ql)||(x.co||'').toLowerCase().includes(ql))) return false;
+    return true;
+  }).sort((a,b)=>(a.used-b.used)||a.name.localeCompare(b.name,'ru'));
+  const esc=s=>(s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  $("glist").innerHTML = rows.length ? rows.map(x=>
+    '<li><div><div class="nm">'+esc(x.name)+'</div><div class="co">'+esc(x.co)+' · <span class="typ">'+esc(x.t)+'</span></div></div>'+
+    (x.used?'<span class="badge in">✅ '+fmt(x.at)+'</span>':'<span class="badge wait">ждём</span>')+'</li>'
+  ).join('') : '<li style="color:#8a9099;text-align:center;list-style:none">Ничего не найдено</li>';
+}
+$("guests-btn").onclick=()=>{ paused=true; $("guests").classList.remove('hidden'); renderGuests(); };
+$("g-back").onclick=()=>{ $("guests").classList.add('hidden'); resume(); };
+$("g-reset").onclick=()=>{ if(confirm('Сбросить все отметки входа? (для теста)')){ used={}; saveUsed(); refreshCount(); renderGuests(); } };
+$("q").oninput=renderGuests;
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{
+  gfilter=b.dataset.f;
+  document.querySelectorAll('.tabs button').forEach(x=>x.classList.toggle('on',x===b));
+  renderGuests();
+});
+
+/* ---------- boot ---------- */
+const _stored=localStorage.getItem(LS_AUTH);
+if(_stored){ enter(_stored).catch(()=>{ localStorage.removeItem(LS_AUTH); }); }
+</script>
+</body></html>
