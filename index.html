@@ -98,6 +98,38 @@ const PBKDF2_ITERS=200000;   // must match tools/gen_scanner_registry.py
 const LS_AUTH="bidconf_scan_auth", LS_USED="bidconf_used";
 const $=id=>document.getElementById(id);
 
+/* ---------- мост с Google-таблицей (отметка явки + синхронизация между телефонами) ---------- */
+const BRIDGE_URL="https://script.google.com/macros/s/AKfycbzLcftl0-qxY9NgvPB4LooE64umrb8b9O5rH82OiqxwKfQuerzBDb0SknO00VVw2xtT/exec";
+// Секрет к таблице = код доступа, который персонал ввёл (в коде страницы секрета НЕТ).
+const scanSecret=()=>localStorage.getItem(LS_AUTH)||"";
+let NUM2HASH={};                                 // номер билета -> hash (для синхронизации явки)
+function bridgePost(obj){                         // fire-and-forget, не блокирует скан
+  try{ fetch(BRIDGE_URL,{method:"POST",mode:"no-cors",
+    headers:{"Content-Type":"text/plain;charset=utf-8"},
+    body:JSON.stringify(Object.assign({secret:scanSecret()},obj))}); }catch(e){}
+}
+function syncAttendance(){                         // подтянуть, кто уже прошёл (с других телефонов) — JSONP
+  const cb="__att"+Date.now();
+  window[cb]=function(j){
+    try{
+      if(j&&j.ok){
+        let changed=false;
+        for(const num in j.attendance){
+          if(j.attendance[num] && NUM2HASH[num] && !used[NUM2HASH[num]]){
+            used[NUM2HASH[num]]={at:Date.now()}; changed=true;
+          }
+        }
+        if(changed){ saveUsed(); refreshCount(); }
+      }
+    }catch(e){}
+    delete window[cb]; s.remove();
+  };
+  const s=document.createElement("script");
+  s.src=BRIDGE_URL+"?secret="+encodeURIComponent(scanSecret())+"&type=attendance&callback="+cb+"&_="+Date.now();
+  s.onerror=()=>{ delete window[cb]; s.remove(); };
+  document.body.appendChild(s);
+}
+
 async function sha256hex(s){
   const b=await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
   return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('');
@@ -124,8 +156,10 @@ async function loadRegistry(pass){
 async function enter(pass){
   TICKETS=await loadRegistry(pass);            // throws if the code is wrong
   localStorage.setItem(LS_AUTH, pass);
+  NUM2HASH={}; for(const h in TICKETS){ NUM2HASH[TICKETS[h].n]=h; }   // номер -> hash
   $("gate").classList.add("hidden");
   refreshCount(); startCamera();
+  syncAttendance(); setInterval(syncAttendance, 30000);   // тянуть явку с других телефонов
 }
 async function tryAuth(){
   const v=$("gpass").value.trim(); if(!v) return;
@@ -174,7 +208,8 @@ async function handleToken(token){
   let cls,title,ok=false,hold=2600;
   if(!t){ cls='err'; title='❌ НЕ НАЙДЕН'; hold=3800; $("omsg").textContent='Билет недействителен'; }
   else if(used[h]){ cls='warn'; title='⚠️ УЖЕ ВОШЁЛ'; hold=3800; $("omsg").textContent='Отметка входа: '+fmt(used[h].at); }
-  else { cls='ok'; title='✅ ПРОПУСТИТЬ'; ok=true; used[h]={at:Date.now()}; saveUsed(); refreshCount(); }
+  else { cls='ok'; title='✅ ПРОПУСТИТЬ'; ok=true; used[h]={at:Date.now()}; saveUsed(); refreshCount();
+         bridgePost({type:'checkin', ticket:t.n, ts:fmt(Date.now())}); }   // отметить в таблице
   if(t){
     $("oname").textContent=t.name;
     $("oco").textContent=t.co||'';
