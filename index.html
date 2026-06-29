@@ -217,12 +217,11 @@ async function handleToken(token){
     $("onum").textContent='Билет № '+t.n;
   }
   $("otitle").textContent=title; showOv(cls); beep(ok); vibrate(ok);
-  clearTimeout(resumeTimer); resumeTimer=setTimeout(resume, hold);
+  // авто-возврат ОТКЛЮЧЁН — продолжаем сканировать ТОЛЬКО по кнопке «Сканировать следующий»
 }
 
 function resume(){ clearTimeout(resumeTimer); hideOv(); paused=false; }
 $("next").onclick=resume;
-ov.addEventListener('click',e=>{ if(e.target===ov) resume(); });
 
 async function loop(){
   if(!paused && video.readyState>=2){
